@@ -1,0 +1,12 @@
+.venv/
+.env
+.env.*
+!.env.example
+vector_store/
+.adk/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.serena/
+.streamlit/secrets.toml
