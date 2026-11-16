@@ -1,0 +1,36 @@
+# Offline test suite on every PR and push to main. No secrets needed: the tests use a fake
+# hashing embedder and an in-memory cache, so there is no Docker, Valkey or gateway.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  compose-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose.yml with placeholder secrets
+        working-directory: infra
+        run: |
+          cp .env.example .env
+          sed -i -E 's/^(LITELLM_MASTER_KEY|LITELLM_SALT_KEY|VERTEX_PROJECT)=.*/\1=ci-placeholder/' .env
+          docker compose config --quiet
