@@ -1,7 +1,8 @@
 # LiteLLM gateway models for RagWithSemanticCache.
 # `model_name` is the alias the app calls (LLM_MODEL / EMBEDDING_MODEL in the root .env).
 # Auth: gcloud Application Default Credentials, mounted read-only by docker-compose.yml.
-# After editing: `docker compose restart litellm` (from infra/).
+# This file is baked into the gateway image (infra/litellm.Dockerfile), not mounted.
+# After editing: `docker compose up -d --build litellm` (from infra/). A plain restart won't pick it up.
 
 x-vertex: &vertex
   vertex_project: os.environ/VERTEX_PROJECT

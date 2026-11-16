@@ -114,14 +114,14 @@ One compose file, `infra/docker-compose.yml`, runs three containers under its ow
 
 | Service | Image | Purpose |
 |---|---|---|
-| `litellm` | `docker.litellm.ai/berriai/litellm` | OpenAI-compatible gateway → Vertex AI (port 4000) |
+| `litellm` | `docker.litellm.ai/berriai/litellm` + `config.yaml` (built locally) | OpenAI-compatible gateway → Vertex AI (port 4000) |
 | `db` | `postgres:16` | Gateway's store for virtual keys and spend logs (internal only) |
 | `valkey` | `valkey/valkey-bundle:9` | Valkey with the **search** module (vector index) for the cache (port 6379) |
 
 **macOS**
 ```bash
 cd infra
-docker compose up -d
+docker compose up -d --build
 docker compose ps                                    # all three "running"
 curl -s http://localhost:4000/health/liveliness      # → "I'm alive!"
 cd ..
@@ -130,11 +130,13 @@ cd ..
 **Windows PowerShell**
 ```powershell
 cd infra
-docker compose up -d
+docker compose up -d --build
 docker compose ps
 Invoke-RestMethod http://localhost:4000/health/liveliness
 cd ..
 ```
+
+The gateway's `infra/config/config.yaml` is **copied into a small local image** (`infra/litellm.Dockerfile`) rather than mounted, so the gateway can't lose its models if the folder is replaced while it runs. `--build` makes that image; only `config/` goes into it, never `infra/.env`.
 
 The **first** start takes a minute or two because the gateway runs its database migrations. Retry the health check until it answers. Admin UI: http://localhost:4000/ui (log in with `LITELLM_MASTER_KEY`).
 
@@ -239,7 +241,7 @@ Run from `infra/` (same on both shells):
 ```bash
 docker compose ps                    # status
 docker compose logs -f litellm       # follow gateway logs (Ctrl+C to exit)
-docker compose restart litellm       # apply infra/config/config.yaml changes
+docker compose up -d --build litellm # apply infra/config/config.yaml changes (restart alone won't)
 docker compose stop                  # pause; containers kept
 docker compose up -d                 # start again
 docker compose down                  # remove containers; keys, spend logs and cache kept (volumes)
@@ -264,7 +266,8 @@ docker compose down -v               # also DELETE the volumes: virtual keys, sp
 | `FT.CREATE failed: Invalid field type … TEXT` | Your Valkey's search module is too old (e.g. `valkey-bundle:8.1`). Use `valkey/valkey-bundle:9` as in the compose file. |
 | `Index dimension mismatch` from the cache | The cache index was created with another embedding model. `DELETE /cache` (or the agent's `clear_cache`), or set a new `SEMANTIC_CACHE_NAME`. |
 | Vertex `404 … model was not found` | The model isn't available to your project or region. Try another `VERTEX_LOCATION`. |
-| `503 … authentication database is temporarily unreachable` while Postgres is healthy | Usually the gateway can't read its config or ADC file, e.g. after re-running `gcloud auth application-default login`. Recreate the container: `docker compose up -d --force-recreate --no-deps litellm` (keys and DB are kept). |
+| Admin UI shows no models, or `Config file not found: /app/config/config.yaml` in the logs | The gateway was started from an older checkout that bind-mounted `config/`, and the folder was replaced. Rebuild: `docker compose up -d --build --force-recreate litellm` (keys and DB are kept). |
+| `503 … authentication database is temporarily unreachable` while Postgres is healthy | Usually the gateway can't read its ADC file, e.g. after re-running `gcloud auth application-default login`. Recreate the container: `docker compose up -d --force-recreate --no-deps litellm` (keys and DB are kept). |
 | Windows: `GOOGLE_APPLICATION_CREDENTIALS` file not found in logs | Set `GCLOUD_ADC_PATH` in `infra/.env` with forward slashes (step 3), then recreate `litellm` as above. |
 | `No module named 'mcp'` when running the agent | `python -m pip install -r requirements.txt`. litellm imports `mcp` when tools are passed. |
 | Every rewording misses, or wrong answers come back as hits | Tune `SEMANTIC_CACHE_THRESHOLD`; see [How the cache decides](#how-the-cache-decides). |
@@ -356,6 +359,8 @@ The upstream project used 0.15 with MiniLM embeddings. With Gemini embeddings, 0
 ```
 infra/
   docker-compose.yml       litellm + db (Postgres) + valkey, project name "ragwithsemanticcache"
+  litellm.Dockerfile       upstream LiteLLM image + config.yaml baked in
+  .dockerignore            build context = config/ only (keeps .env out of the image)
   config/config.yaml       gateway aliases: gemini-2.5-flash, gemini-embedding-001
   .env.example             gateway secrets template → infra/.env
 rag/

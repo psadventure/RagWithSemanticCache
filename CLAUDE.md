@@ -12,7 +12,7 @@ Ported from `../RAGAdvancedWithSemanticCache` (branch `feature/litellm-gateway`)
 ## Commands
 
 ```bash
-cd infra && docker compose up -d && cd ..          # litellm + db + valkey
+cd infra && docker compose up -d --build && cd ..  # litellm + db + valkey (--build also applies config.yaml edits)
 python scripts/test_gateway.py                    # gateway smoke test
 python -m rag.ingest                              # data/*.md → vector_store/
 python -m uvicorn app.backend:app --reload        # API :8000
@@ -24,7 +24,7 @@ python -m pytest -q                               # offline tests (no Docker/net
 ## Decisions
 
 - **Models (via gateway aliases):** chat `gemini-2.5-flash`; embeddings `gemini-embedding-001` (3072 dims). No local embedding model. Vertex takes **1 input per embedding request**, so the embedder loops one text at a time.
-- **Docker:** one `infra/docker-compose.yml` adapted from LiteLLM's quickstart (credited), with top-level `name: ragwithsemanticcache` so it never collides with the ragtechniques gateway. Ports are bound to 127.0.0.1 and overridable (`LITELLM_PORT`, `VALKEY_PORT`). The `config/` folder is mounted, not the single file (single-file mounts go stale). ADC is mounted read-only; Windows sets `GCLOUD_ADC_PATH` with forward slashes.
+- **Docker:** one `infra/docker-compose.yml` adapted from LiteLLM's quickstart (credited), with top-level `name: ragwithsemanticcache` so it never collides with the ragtechniques gateway. Ports are bound to 127.0.0.1 and overridable (`LITELLM_PORT`, `VALKEY_PORT`). `config/config.yaml` is **baked into a thin image** (`infra/litellm.Dockerfile`, `pull_policy: build`), not bind-mounted: bind mounts (file *or* folder) go stale when the host path is replaced while the container runs, and the gateway then silently serves no models. Config edits need `docker compose up -d --build litellm`. `infra/.dockerignore` limits the build context to `config/` so `infra/.env` never enters an image. `tests/test_infra_config.py` pins this. ADC is mounted read-only; Windows sets `GCLOUD_ADC_PATH` with forward slashes.
 - **Valkey image is `valkey/valkey-bundle:9`, not 8.1.** The search module in 8.1 (1.0.x) rejects BetterDB's `FT.CREATE` schema (`Unknown argument TEXT`).
 - **Auth:** the app uses a scoped LiteLLM **virtual key** (models: the two aliases), never the master key. Root `.env` = app settings; `infra/.env` = gateway secrets. Both are gitignored, and each has a `.env.example` kept in sync by `tests/test_env_examples.py`.
 - **Light dependencies:** no langchain except `langchain-text-splitters`. Uses the `openai` SDK (sync for ingest, async for serving) against the gateway, and raw `faiss-cpu` (`IndexFlatIP` over L2-normalised vectors, saved as `index.faiss` + `chunks.json`), so there's no pickle and no `allow_dangerous_deserialization`.

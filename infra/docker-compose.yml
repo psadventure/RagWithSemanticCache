@@ -3,12 +3,14 @@
 # Adapted from LiteLLM's quickstart compose file
 # (https://github.com/BerriAI/litellm/blob/main/docker/docker-compose.quickstart.yml,
 #  docs: https://docs.litellm.ai/docs/proxy/docker_quick_start), with credit to BerriAI.
-# Changes: own compose project name, ports bound to 127.0.0.1, the config/ folder and gcloud
-# ADC mounted read-only, Vertex AI env, and a Valkey service for the semantic cache.
+# Changes: own compose project name, ports bound to 127.0.0.1, config.yaml baked into a thin
+# image (litellm.Dockerfile), gcloud ADC mounted read-only, Vertex AI env, and a Valkey service
+# for the semantic cache.
 #
 # Run from this folder (compose reads infra/.env):
 #   cp .env.example .env      # then fill it in, see README.md
-#   docker compose up -d
+#   docker compose up -d --build
+#   docker compose up -d --build litellm    # after editing config/config.yaml
 #
 # Keep infra/.env once the database exists: changing LITELLM_SALT_KEY later makes the
 # credentials stored in Postgres unreadable.
@@ -19,8 +21,14 @@ name: ragwithsemanticcache
 
 services:
   litellm:
-    # For anything beyond local use, pin this to a specific release tag.
-    image: docker.litellm.ai/berriai/litellm:latest
+    # Upstream LiteLLM image + config.yaml copied in. Not bind-mounted: a mounted folder goes
+    # stale if infra/config/ is replaced while the container runs, and the gateway then
+    # silently serves no models ("Config file not found" in the logs).
+    build:
+      context: .
+      dockerfile: litellm.Dockerfile
+    image: ragwithsemanticcache-litellm:local
+    pull_policy: build
     command: ["--config", "/app/config/config.yaml"]
     ports:
       - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
@@ -33,9 +41,6 @@ services:
       VERTEX_PROJECT: ${VERTEX_PROJECT:?set it in infra/.env}
       VERTEX_LOCATION: ${VERTEX_LOCATION:-us-east1}
     volumes:
-      # Mount the folder, not the file: single-file bind mounts go stale when an editor or
-      # git replaces config.yaml, and the gateway then fails with a misleading 503.
-      - ./config:/app/config:ro
       # gcloud Application Default Credentials, read-only. A single-file mount, so the
       # container sees only this credential. Recreate the container after re-running
       # `gcloud auth application-default login`.
