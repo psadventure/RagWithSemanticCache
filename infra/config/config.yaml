@@ -1,0 +1,23 @@
+# LiteLLM gateway models for RagWithSemanticCache.
+# `model_name` is the alias the app calls (LLM_MODEL / EMBEDDING_MODEL in the root .env).
+# Auth: gcloud Application Default Credentials, mounted read-only by docker-compose.yml.
+# After editing: `docker compose restart litellm` (from infra/).
+
+x-vertex: &vertex
+  vertex_project: os.environ/VERTEX_PROJECT
+  vertex_location: os.environ/VERTEX_LOCATION
+
+model_list:
+  # ── chat: answers and the ADK agent ──
+  - model_name: gemini-2.5-flash
+    litellm_params: { model: vertex_ai/gemini-2.5-flash, <<: *vertex }
+
+  # ── embeddings: ingestion, retrieval and the semantic cache (3072 dims) ──
+  # Vertex takes one input per request for this model, so the app sends one text per call.
+  - model_name: gemini-embedding-001
+    litellm_params: { model: vertex_ai/gemini-embedding-001, <<: *vertex }
+    model_info: { mode: embedding }
+
+litellm_settings:
+  drop_params: true   # silently drop OpenAI params Vertex doesn't support
+  request_timeout: 120
