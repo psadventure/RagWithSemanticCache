@@ -1,0 +1,5 @@
+# Build context for litellm.Dockerfile: only the gateway config. Everything else,
+# especially .env (master key, salt key), stays out of the image and the build cache.
+*
+!config/
+!config/config.yaml
