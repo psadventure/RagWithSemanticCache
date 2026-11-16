@@ -43,6 +43,13 @@ def test_dockerfile_copies_config_to_the_path_the_command_reads():
     assert '"--config", "/app/config/config.yaml"' in _litellm_service()
 
 
+def test_litellm_base_image_is_pinned():
+    dockerfile = (INFRA / "litellm.Dockerfile").read_text(encoding="utf-8")
+    match = re.search(r"^FROM\s+\S+/litellm:(\S+)", dockerfile, flags=re.M)
+    assert match, "FROM line for the litellm image not found"
+    assert re.fullmatch(r"v\d+\.\d+\.\d+(-[\w.]+)?", match.group(1)), f"unpinned base image tag: {match.group(1)}"
+
+
 def test_build_context_excludes_env_files():
     lines = _active_lines((INFRA / ".dockerignore").read_text(encoding="utf-8"))
     assert lines[0] == "*", "build context must start from ignore-everything"

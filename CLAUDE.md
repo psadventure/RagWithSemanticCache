@@ -1,13 +1,13 @@
 # RagWithSemanticCache — project notes
 
-Extends `../CLAUDE.md` (working agreement, engineering defaults). Public repo: `psadventure/RagWithSemanticCache`.
+Project notes for Claude Code (any `CLAUDE.md` in parent folders is also read). Public repo: `psadventure/RagWithSemanticCache`.
 
 RAG chatbot over 3 fictional Kestrel Markdown docs (`data/`), with a BetterDB semantic cache on Valkey,
 a FastAPI backend + Streamlit UI, and a Google ADK agent (`adk web agent`). Every model call goes
 through this repo's own Dockerised LiteLLM gateway → Vertex AI.
 
-Ported from `../RAGAdvancedWithSemanticCache` (branch `feature/litellm-gateway`). Patterns
-(gateway infra, ADK tools, env drift test) were copied from `../ragtechniques`. Both are read-only sources.
+Ported from an earlier semantic-cache prototype; the gateway infra, ADK tools and env drift test follow
+patterns from a sibling RAG learning project. Neither is needed to build or run this repo.
 
 ## Commands
 
@@ -24,7 +24,9 @@ python -m pytest -q                               # offline tests (no Docker/net
 ## Decisions
 
 - **Models (via gateway aliases):** chat `gemini-2.5-flash`; embeddings `gemini-embedding-001` (3072 dims). No local embedding model. Vertex takes **1 input per embedding request**, so the embedder loops one text at a time.
-- **Docker:** one `infra/docker-compose.yml` adapted from LiteLLM's quickstart (credited), with top-level `name: ragwithsemanticcache` so it never collides with the ragtechniques gateway. Ports are bound to 127.0.0.1 and overridable (`LITELLM_PORT`, `VALKEY_PORT`). `config/config.yaml` is **baked into a thin image** (`infra/litellm.Dockerfile`, `pull_policy: build`), not bind-mounted: bind mounts (file *or* folder) go stale when the host path is replaced while the container runs, and the gateway then silently serves no models. Config edits need `docker compose up -d --build litellm`. `infra/.dockerignore` limits the build context to `config/` so `infra/.env` never enters an image. `tests/test_infra_config.py` pins this. ADC is mounted read-only; Windows sets `GCLOUD_ADC_PATH` with forward slashes.
+- **Docker:** one `infra/docker-compose.yml` adapted from LiteLLM's quickstart (credited), with top-level `name: ragwithsemanticcache` so it never collides with another LiteLLM stack on the same machine. Ports are bound to 127.0.0.1 and overridable (`LITELLM_PORT`, `VALKEY_PORT`). `config/config.yaml` is **baked into a thin image** (`infra/litellm.Dockerfile`, `pull_policy: build`), not bind-mounted: bind mounts (file *or* folder) go stale when the host path is replaced while the container runs, and the gateway then silently serves no models. Config edits need `docker compose up -d --build litellm`. `infra/.dockerignore` limits the build context to `config/` so `infra/.env` never enters an image. `tests/test_infra_config.py` pins this. ADC is mounted read-only; Windows sets `GCLOUD_ADC_PATH` with forward slashes.
+- **LiteLLM image pinned** (`v1.109.1` in `infra/litellm.Dockerfile`, matching `litellm` in `requirements.txt`) so a new upstream release can't break a fresh clone; `tests/test_infra_config.py` rejects `latest`. Upgrade by bumping the tag, rebuilding and running `scripts/test_gateway.py`.
+- **CI:** `.github/workflows/tests.yml` runs the offline pytest suite and `docker compose config` (placeholder secrets) on every PR. `main` is protected: changes land via PR with both checks green.
 - **Valkey image is `valkey/valkey-bundle:9`, not 8.1.** The search module in 8.1 (1.0.x) rejects BetterDB's `FT.CREATE` schema (`Unknown argument TEXT`).
 - **Auth:** the app uses a scoped LiteLLM **virtual key** (models: the two aliases), never the master key. Root `.env` = app settings; `infra/.env` = gateway secrets. Both are gitignored, and each has a `.env.example` kept in sync by `tests/test_env_examples.py`.
 - **Light dependencies:** no langchain except `langchain-text-splitters`. Uses the `openai` SDK (sync for ingest, async for serving) against the gateway, and raw `faiss-cpu` (`IndexFlatIP` over L2-normalised vectors, saved as `index.faiss` + `chunks.json`), so there's no pickle and no `allow_dangerous_deserialization`.

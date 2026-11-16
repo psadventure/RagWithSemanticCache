@@ -260,7 +260,7 @@ docker compose down -v               # also DELETE the volumes: virtual keys, sp
 | `set it in infra/.env` from compose | `infra/.env` is missing or a required key is empty (step 3). |
 | `LITELLM_API_KEY is not set` | Mint a key (step 5) and put it in the root `.env`. |
 | 401/403 from the gateway | The virtual key is wrong or revoked (e.g. after `down -v`). Mint a new one. Don't use the master key. |
-| Port 4000 or 6379 already in use | Another gateway or Redis/Valkey is running (e.g. the `ragtechniques` gateway). Stop it, or set `LITELLM_PORT` / `VALKEY_PORT` in `infra/.env` **and** `LITELLM_BASE_URL` / `VALKEY_PORT` in `.env`. |
+| Port 4000 or 6379 already in use | Another gateway or Redis/Valkey is running (e.g. a LiteLLM stack from another project). Stop it, or set `LITELLM_PORT` / `VALKEY_PORT` in `infra/.env` **and** `LITELLM_BASE_URL` / `VALKEY_PORT` in `.env`. |
 | `No vector store at 'vector_store'` (HTTP 503) | Run `python -m rag.ingest`. |
 | `Query embedding has N dimensions but the index has M` | You changed `EMBEDDING_MODEL`. Re-run ingestion. |
 | `FT.CREATE failed: Invalid field type … TEXT` | Your Valkey's search module is too old (e.g. `valkey-bundle:8.1`). Use `valkey/valkey-bundle:9` as in the compose file. |
@@ -363,6 +363,7 @@ infra/
   .dockerignore            build context = config/ only (keeps .env out of the image)
   config/config.yaml       gateway aliases: gemini-2.5-flash, gemini-embedding-001
   .env.example             gateway secrets template → infra/.env
+.github/workflows/tests.yml  CI: offline pytest + compose validation on every PR
 rag/
   config.py                app settings from .env
   gateway.py               openai SDK clients (sync + async) for the gateway

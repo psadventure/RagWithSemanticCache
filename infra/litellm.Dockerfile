@@ -9,7 +9,8 @@
 # Secrets never enter the image: .dockerignore limits the build context to config/, and keys,
 # the salt and gcloud ADC are passed at runtime by docker-compose.yml.
 
-# For anything beyond local use, pin this to a specific release tag.
-FROM docker.litellm.ai/berriai/litellm:latest
+# Pinned to the release this repo was tested with (same as litellm in requirements.txt).
+# To upgrade: change the tag, `docker compose up -d --build litellm`, run scripts/test_gateway.py.
+FROM docker.litellm.ai/berriai/litellm:v1.109.1
 
 COPY config/config.yaml /app/config/config.yaml
